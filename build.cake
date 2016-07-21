@@ -1,5 +1,3 @@
-#addin "nuget:?package=Newtonsoft.Json&version=8.0.3"
-
 // Usings
 using System.Xml;
 using System.Xml.Linq;
@@ -9,7 +7,7 @@ using System.Xml.XPath;
 var target = Argument<string>("target", "Default");
 var source = Argument<string>("source", null);
 var apiKey = Argument<string>("apikey", null);
-var version = GetNancyVersion(new FilePath("dependencies/Nancy/src/Nancy/project.json"));
+var version = target.ToLower() == "default" ? "2.0.0-Pre" + (EnvironmentVariable("APPVEYOR_BUILD_NUMBER") ?? "0") : GetNancyVersion(new FilePath("dependencies/Nancy/src/Nancy/project.json"));
 
 // Variables
 var configuration = IsRunningOnWindows() ? "Release" : "MonoRelease";
@@ -48,12 +46,11 @@ Task("Update-Version")
   }
   var file = new FilePath("src/Nancy.Bootstrappers.Unity/project.json");
 
-  var project = Newtonsoft.Json.Linq.JObject.Parse(
-    System.IO.File.ReadAllText(file.FullPath, Encoding.UTF8));
-  
-  project["version"].Replace(version);
-  
-  System.IO.File.WriteAllText(file.FullPath, project.ToString(), Encoding.UTF8);
+  var project = System.IO.File.ReadAllText(file.FullPath, Encoding.UTF8);
+
+  project = System.Text.RegularExpressions.Regex.Replace(project, "(\"version\":\\s*)\".+\"", "$1\"" + version + "\"");
+
+  System.IO.File.WriteAllText(file.FullPath, project, Encoding.UTF8);
 });
       
 
@@ -213,14 +210,13 @@ Task("Publish-NuGet")
 
 public string GetNancyVersion(FilePath filePath)
 {
-  var project = Newtonsoft.Json.Linq.JObject.Parse(
-      System.IO.File.ReadAllText(filePath.FullPath, Encoding.UTF8));
-  return project["version"].ToString();
+  var project = System.IO.File.ReadAllText(filePath.FullPath, Encoding.UTF8);
+  return System.Text.RegularExpressions.Regex.Match(project, "\"version\":\\s*\"(.+)\"").Groups[1].ToString();
 }
 
 Task("Default")
   .IsDependentOn("Test")
-  .IsDependentOn("Package");
+  .IsDependentOn("Package-NuGet");
 
 Task("Mono")
   .IsDependentOn("Test");
